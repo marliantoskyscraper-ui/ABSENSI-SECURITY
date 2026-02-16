@@ -1,37 +1,40 @@
 import React, { useState, useEffect, useRef, Component } from 'react';
-import { Camera, MapPin, FileText, UserCheck, LogOut, Shield, AlertTriangle, Calendar, Settings, History, CheckCircle, XCircle, Menu, Users, Trash2, Upload, Download, FileSpreadsheet, Image as ImageIcon, Check, X, Clock, Coffee, FileDown, Key, Crosshair, Map, Lock, RefreshCw } from 'lucide-react';
+import { Camera, MapPin, FileText, UserCheck, LogOut, Shield, AlertTriangle, Calendar, Settings, History, CheckCircle, XCircle, Menu, Users, Trash2, Upload, Download, FileSpreadsheet, Image as ImageIcon, Check, X, Clock, Coffee, FileDown, Key, Crosshair, Map as MapIcon, Lock, RefreshCw } from 'lucide-react';
 
-// --- Error Boundary (Pencegah Layar Blank) ---
+// --- Error Boundary (Pencegah Layar Blank Fatal) ---
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    console.error("System Error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-100">
-          <AlertTriangle size={48} className="text-red-500 mb-4" />
-          <h1 className="text-xl font-bold text-gray-800 mb-2">Terjadi Kesalahan Sistem</h1>
-          <p className="text-gray-600 text-sm mb-6">Aplikasi mengalami crash. Silakan refresh halaman.</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition"
-          >
-            <RefreshCw size={20} className="inline mr-2" /> Refresh Halaman
-          </button>
-          <pre className="mt-4 p-2 bg-gray-200 rounded text-xs text-left overflow-auto max-w-full">
-            {this.state.error && this.state.error.toString()}
-          </pre>
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
+          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full">
+            <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Terjadi Kesalahan</h2>
+            <p className="text-gray-500 text-sm mb-6">Sistem mengalami gangguan teknis. Silakan muat ulang.</p>
+            <button 
+              onClick={() => {
+                localStorage.clear(); // Opsi darurat: hapus data jika corrupt parah
+                window.location.reload();
+              }} 
+              className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow hover:bg-blue-700 transition flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={18} /> Reset & Reload
+            </button>
+            <p className="text-[10px] text-red-400 mt-4">*Klik tombol ini jika aplikasi terus bermasalah.</p>
+          </div>
         </div>
       );
     }
@@ -39,8 +42,7 @@ class ErrorBoundary extends Component {
   }
 }
 
-// --- Utilitas & Helper ---
-
+// --- Helper Functions ---
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
   const R = 6371e3; 
@@ -48,12 +50,8 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
   const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
   return Math.round(R * c);
 };
 
@@ -62,13 +60,24 @@ const formatDateTime = (dateString) => {
     if (!dateString) return "-";
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(dateString).toLocaleDateString('id-ID', options);
+  } catch (e) { return "-"; }
+};
+
+// Fungsi Load Data Aman (Mencegah Crash jika data corrupt)
+const safeLoadJSON = (key, fallback) => {
+  try {
+    const item = localStorage.getItem(key);
+    if (!item) return fallback;
+    const parsed = JSON.parse(item);
+    // Validasi tipe data: jika fallback array, parsed harus array
+    if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback;
+    return parsed;
   } catch (e) {
-    return "-";
+    return fallback;
   }
 };
 
 // --- Komponen Utama ---
-
 export default function App() {
   return (
     <ErrorBoundary>
@@ -82,53 +91,46 @@ function MainApp() {
   const [user, setUser] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // Data Mock - Default Data (Aman untuk inisialisasi)
-  const [locations, setLocations] = useState([
+  // Default Data (Fallback)
+  const defaultLocations = [
     { id: 1, name: 'Pos Utama (Gerbang Depan)', lat: -6.175392, lng: 106.827153, radius: 100 }, 
     { id: 2, name: 'Pos Gudang Belakang', lat: -6.175000, lng: 106.828000, radius: 100 },
     { id: 3, name: 'Enter 2 Pangkalan Bun', lat: -2.686520, lng: 111.616330, radius: 100 },
     { id: 4, name: 'Dinas PUPR Pangkalan Bun', lat: -2.694600, lng: 111.635800, radius: 100 },
-  ]);
+  ];
 
-  const [users, setUsers] = useState([
+  const defaultUsers = [
     { id: 1, name: 'Administrator', username: 'admin', password: 'admin', role: 'admin', locationId: null },
     { id: 2, name: 'Petugas Default', username: 'petugas', password: '123', role: 'security', locationId: 1 },
     { id: 3, name: 'Budi Santoso', username: 'budi', password: '123', role: 'security', locationId: 1 },
     { id: 4, name: 'Marlianto', username: 'marlianto', password: '123', role: 'security', locationId: 3 },
     { id: 5, name: 'Verina', username: 'verina', password: '123', role: 'security', locationId: 4 },
-  ]);
+  ];
 
+  const [locations, setLocations] = useState(defaultLocations);
+  const [users, setUsers] = useState(defaultUsers);
   const [logs, setLogs] = useState([]);
   const [reports, setReports] = useState([]);
 
-  // Load data (Safe Mode)
+  // Load Data on Mount
   useEffect(() => {
-    try {
-      const savedLogs = localStorage.getItem('security_logs');
-      const savedReports = localStorage.getItem('security_reports');
-      const savedLocs = localStorage.getItem('security_locations');
-      const savedUsers = localStorage.getItem('security_users_v2');
-      
-      if (savedLogs) setLogs(JSON.parse(savedLogs) || []);
-      if (savedReports) setReports(JSON.parse(savedReports) || []);
-      if (savedLocs) setLocations(JSON.parse(savedLocs) || locations);
-      if (savedUsers) setUsers(JSON.parse(savedUsers) || users);
-    } catch (e) {
-      console.warn("Storage load failed, using defaults");
-    }
+    setLocations(safeLoadJSON('security_locations', defaultLocations));
+    
+    // Pastikan user tidak kosong, jika kosong reset ke default agar admin tetap bisa login
+    const loadedUsers = safeLoadJSON('security_users_v2', defaultUsers);
+    setUsers(loadedUsers.length > 0 ? loadedUsers : defaultUsers);
+    
+    setLogs(safeLoadJSON('security_logs', []));
+    setReports(safeLoadJSON('security_reports', []));
   }, []);
 
-  // Simpan data (Safe Mode)
+  // Auto Save
   useEffect(() => {
-    try {
-      localStorage.setItem('security_logs', JSON.stringify(logs));
-      localStorage.setItem('security_reports', JSON.stringify(reports));
-      localStorage.setItem('security_locations', JSON.stringify(locations));
-      localStorage.setItem('security_users_v2', JSON.stringify(users));
-    } catch (e) {
-      // Ignore storage errors
-    }
-  }, [logs, reports, locations, users]);
+    localStorage.setItem('security_locations', JSON.stringify(locations));
+    localStorage.setItem('security_users_v2', JSON.stringify(users));
+    localStorage.setItem('security_logs', JSON.stringify(logs));
+    localStorage.setItem('security_reports', JSON.stringify(reports));
+  }, [locations, users, logs, reports]);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -139,11 +141,7 @@ function MainApp() {
 
     if (foundUser) {
       setUser(foundUser);
-      if (foundUser.role === 'admin') {
-        setView('admin');
-      } else {
-        setView('dashboard');
-      }
+      setView(foundUser.role === 'admin' ? 'admin' : 'dashboard');
       showNotification(`Selamat datang, ${foundUser.name}`);
     } else {
       showNotification('Username atau password salah', 'error');
@@ -164,7 +162,7 @@ function MainApp() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // --- Mobile Frame Wrapper ---
+  // --- Mobile Frame Wrapper (Responsive) ---
   const MobileFrame = ({ children }) => (
     <div className="min-h-screen bg-gray-100 md:bg-gray-900 md:flex md:items-center md:justify-center font-sans p-0 md:p-4">
       <div className="w-full md:max-w-[400px] md:h-[850px] bg-slate-100 md:rounded-[2.5rem] md:shadow-2xl md:border-[10px] md:border-gray-800 relative overflow-hidden flex flex-col shadow-xl h-screen md:h-auto">
@@ -181,7 +179,7 @@ function MainApp() {
           <div className="bg-blue-800 p-10 text-center rounded-b-[3rem] shadow-lg mb-8">
             <Shield className="w-20 h-20 text-yellow-400 mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-white">SecuGuard</h1>
-            <p className="text-blue-200 mt-2">Portal Absensi Security</p>
+            <p className="text-blue-200 mt-2">Sistem Absensi v2.1</p>
           </div>
           <div className="p-8">
             <form onSubmit={handleLogin} className="space-y-6">
@@ -205,7 +203,7 @@ function MainApp() {
               </button>
             </form>
             <div className="mt-8 text-center text-xs text-slate-400">
-               <p>Versi 2.1 (GitHub Ready)</p>
+               <p>Siap untuk Deploy (GitHub/Vercel)</p>
             </div>
           </div>
         </div>
@@ -222,7 +220,7 @@ function MainApp() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium bg-blue-800 px-2 py-1 rounded hidden sm:inline">{user?.name}</span>
-          <button onClick={() => { setUser(null); setView('login'); }} className="p-1 hover:bg-blue-800 rounded text-red-200 hover:text-white transition">
+          <button onClick={() => { setUser(null); setView('login'); }} className="p-1 hover:bg-blue-800 rounded text-red-200 hover:text-white transition" title="Logout">
             <LogOut size={20} />
           </button>
         </div>
@@ -342,7 +340,7 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
   const [targetLoc, setTargetLoc] = useState(null);
   const [distance, setDistance] = useState(0);
   const [isValidLoc, setIsValidLoc] = useState(false);
-  const [loadingLoc, setLoadingLoc] = useState(false); // Default False, triggered by user
+  const [loadingLoc, setLoadingLoc] = useState(false); 
   const [cameraActive, setCameraActive] = useState(false);
   const [absentType, setAbsentType] = useState('Masuk'); 
   const [isManualUpload, setIsManualUpload] = useState(false);
@@ -355,12 +353,12 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
     setTargetLoc(assigned);
   }, [locations, user]);
 
-  // 2. Init GPS & Camera (Manual Trigger agar aman di preview)
+  // 2. Hardware Trigger (Manual untuk keamanan di browser)
   const activateHardware = async () => {
     setLoadingLoc(true);
     setCameraActive(true);
 
-    // GPS Logic
+    // GPS Init
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -368,7 +366,7 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
            setLoadingLoc(false);
         },
         (err) => {
-           console.warn("GPS Error, using mock.");
+           // Fallback aman untuk preview/error
            setUseMockGPS(true);
            setLoadingLoc(false);
         },
@@ -379,7 +377,7 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
        setLoadingLoc(false);
     }
 
-    // Camera Logic
+    // Camera Init
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -387,19 +385,20 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
           videoRef.current.srcObject = stream;
         }
       } catch (err) {
-        // Fallback or just let UI show upload button
-        setCameraActive(false); // Will trigger UI to show upload
+        setCameraActive(false); // Gagal akses kamera, kembali ke UI upload
+        showNotif("Kamera tidak dapat diakses, silakan upload manual.", "warning");
       }
     } else {
         setCameraActive(false);
     }
   };
 
+  // Cleanup Camera
   useEffect(() => {
-    // Cleanup camera on unmount
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
       }
     };
   }, []);
@@ -422,6 +421,12 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
+    // Cek apakah video sudah siap untuk diambil gambarnya
+    if (videoRef.current.readyState !== 4) {
+         showNotif("Tunggu kamera siap...", "warning");
+         return;
+    }
+    
     try {
         const canvas = document.createElement('canvas');
         const video = videoRef.current;
@@ -431,8 +436,13 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
         const dataUrl = canvas.toDataURL('image/jpeg');
         setPhoto(dataUrl);
         setIsManualUpload(false); 
+        
+        // Stop camera stream to save battery
+        if (video.srcObject) {
+            video.srcObject.getTracks().forEach(track => track.stop());
+        }
     } catch(e) {
-        // error
+        showNotif("Gagal mengambil foto", "error");
     }
   };
 
@@ -443,14 +453,14 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
       reader.onloadend = () => {
         setPhoto(reader.result);
         setIsManualUpload(true); 
-        setCameraActive(false); // Hide camera UI if upload used
+        setCameraActive(false); 
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleSubmit = () => {
-    if (!isValidLoc) {
+    if (!isValidLoc && !useMockGPS) {
       showNotif("Anda berada di luar radius lokasi kerja!", "error");
       return;
     }
@@ -504,12 +514,12 @@ function AbsensiPage({ user, locations, setView, setLogs, showNotif }) {
       <div className="relative bg-black rounded-2xl overflow-hidden aspect-[3/4] shadow-lg flex flex-col items-center justify-center group">
         {!photo ? (
           cameraActive ? (
-            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           ) : (
             <div className="flex flex-col items-center justify-center text-white p-6 text-center h-full w-full bg-slate-800">
                <Camera size={48} className="text-slate-500 mb-4" />
                <p className="text-xs text-slate-400 mb-4">Kamera belum aktif</p>
-               <button onClick={activateHardware} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm mb-2 hover:bg-blue-700 transition">Aktifkan Kamera & GPS</button>
+               <button onClick={activateHardware} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm mb-2 hover:bg-blue-700 transition font-bold shadow-lg">Aktifkan Kamera & GPS</button>
                <div className="flex items-center gap-2 w-full px-8 my-2">
                  <div className="h-px bg-slate-600 flex-1"></div>
                  <span className="text-[10px] text-slate-500">ATAU</span>
@@ -1049,7 +1059,7 @@ function AdminPage({ locations, setLocations, logs, setLogs, reports, users, set
                       onChange={handleCoordPaste} 
                     />
                     <a href="https://www.google.com/maps" target="_blank" rel="noreferrer" className="bg-white p-2 rounded text-blue-600 border border-blue-200 hover:bg-blue-50" title="Buka Google Maps">
-                      <Map size={16} />
+                      <MapIcon size={16} />
                     </a>
                   </div>
                 </div>
